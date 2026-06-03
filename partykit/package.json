@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "partykit dev",
     "deploy": "partykit deploy",
+    "test": "tsc --module NodeNext --moduleResolution NodeNext --target ES2022 --types node --rootDir src --outDir ../.test-output/partykit src/permissions.ts src/permissions.test.ts && node --test ../.test-output/partykit/permissions.test.js",
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {

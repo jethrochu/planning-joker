@@ -1,4 +1,5 @@
 import type * as Party from "partykit/server";
+import { canUseHostAction } from "./permissions";
 
 type DeckType = "fibonacci" | "tshirt" | "powers";
 
@@ -11,6 +12,7 @@ type StoredParticipant = {
 };
 
 type StoredRoomState = {
+  hostId: string | null;
   storyTitle: string;
   deck: DeckType;
   revealed: boolean;
@@ -22,12 +24,14 @@ type PublicParticipant = {
   id: string;
   name: string;
   connected: boolean;
+  isHost: boolean;
   voted: boolean;
   vote: string | null;
 };
 
 type PublicRoomState = {
   roomId: string;
+  hostId: string | null;
   storyTitle: string;
   deck: DeckType;
   revealed: boolean;
@@ -61,12 +65,37 @@ const deckTypes = Object.keys(decks) as DeckType[];
 
 function createInitialState(): StoredRoomState {
   return {
+    hostId: null,
     storyTitle: "",
     deck: "fibonacci",
     revealed: false,
     participants: {},
     updatedAt: Date.now()
   };
+}
+
+function normalizeState(state: StoredRoomState): StoredRoomState {
+  return {
+    ...state,
+    hostId: state.hostId ?? null,
+    participants: state.participants ?? {}
+  };
+}
+
+function chooseHostId(participants: Record<string, StoredParticipant>) {
+  const [nextHost] = Object.values(participants)
+    .filter((participant) => participant.connected)
+    .sort((a, b) => a.lastSeen - b.lastSeen);
+
+  return nextHost?.id ?? null;
+}
+
+function ensureHost(state: StoredRoomState) {
+  const host = state.hostId ? state.participants[state.hostId] : null;
+
+  if (host?.connected) return;
+
+  state.hostId = chooseHostId(state.participants);
 }
 
 function cleanText(value: unknown, maxLength: number) {
@@ -127,10 +156,17 @@ export default class Server implements Party.Server {
         vote: state.participants[clientId]?.vote ?? null,
         lastSeen: Date.now()
       };
+
+      ensureHost(state);
     }
 
     if (payload.type !== "join" && !state.participants[clientId]) {
       this.sendError(sender, "Join the room before sending updates.");
+      return;
+    }
+
+    if (!canUseHostAction(clientId, state.hostId, payload.type)) {
+      this.sendError(sender, "Only the host can reveal or reset votes.");
       return;
     }
 
@@ -203,6 +239,7 @@ export default class Server implements Party.Server {
 
     state.participants[clientId].connected = false;
     state.participants[clientId].lastSeen = Date.now();
+    ensureHost(state);
     await this.saveState(state);
     this.broadcastState(state);
   }
@@ -216,7 +253,7 @@ export default class Server implements Party.Server {
       return initialState;
     }
 
-    return state;
+    return normalizeState(state);
   }
 
   private async saveState(state: StoredRoomState) {
@@ -231,12 +268,14 @@ export default class Server implements Party.Server {
         id: participant.id,
         name: participant.name,
         connected: participant.connected,
+        isHost: participant.id === state.hostId,
         voted: participant.vote !== null,
         vote: state.revealed ? participant.vote : null
       }));
 
     return {
       roomId: this.room.id,
+      hostId: state.hostId,
       storyTitle: state.storyTitle,
       deck: state.deck,
       revealed: state.revealed,

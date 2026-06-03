@@ -7,3 +7,4 @@ dist
 .partykit
 coverage
 *.tsbuildinfo
+.test-output

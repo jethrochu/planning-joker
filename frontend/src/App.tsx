@@ -178,6 +178,7 @@ function PokerRoom({
 
   const fallbackState: PublicRoomState = {
     roomId,
+    hostId: null,
     storyTitle: "",
     deck: "fibonacci",
     revealed: false,
@@ -186,6 +187,8 @@ function PokerRoom({
   };
 
   const activeState = state ?? fallbackState;
+  const isHost = activeState.hostId === clientId;
+  const hostName = activeState.participants.find((participant) => participant.isHost)?.name ?? null;
   const currentVote = activeState.revealed ? currentParticipant?.vote ?? null : localVote;
 
   useEffect(() => {
@@ -222,6 +225,8 @@ function PokerRoom({
         />
         <ControlsPanel
           state={activeState}
+          isHost={isHost}
+          hostName={hostName}
           onReveal={() => send({ type: "reveal" })}
           onReset={() => {
             setLocalVote(null);
@@ -394,7 +399,10 @@ function ParticipantsPanel({ state }: { state: PublicRoomState }) {
           state.participants.map((participant) => (
             <div className="participant-row" key={participant.id}>
               <span className={participant.connected ? "presence online" : "presence"} aria-hidden="true" />
-              <span className="participant-name">{participant.name}</span>
+              <span className="participant-name">
+                {participant.name}
+                {participant.isHost ? <span className="host-label">Host</span> : null}
+              </span>
               <span className={participant.voted ? "vote-state voted" : "vote-state"}>
                 {state.revealed && participant.vote ? participant.vote : participant.voted ? "Voted" : "Open"}
               </span>
@@ -411,14 +419,32 @@ function ParticipantsPanel({ state }: { state: PublicRoomState }) {
 
 function ControlsPanel({
   state,
+  isHost,
+  hostName,
   onReveal,
   onReset
 }: {
   state: PublicRoomState;
+  isHost: boolean;
+  hostName: string | null;
   onReveal: () => void;
   onReset: () => void;
 }) {
   const votedCount = getVotedCount(state.participants);
+
+  if (!isHost) {
+    return (
+      <div className="workspace-controls host-waiting">
+        <span>
+          {state.revealed
+            ? "Results revealed"
+            : hostName
+              ? `Waiting for ${hostName} to reveal`
+              : "Waiting for host to reveal"}
+        </span>
+      </div>
+    );
+  }
 
   return (
     <div className="workspace-controls">

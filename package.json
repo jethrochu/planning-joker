@@ -11,6 +11,7 @@
     "dev:frontend": "npm --workspace frontend run dev",
     "dev:party": "npm --workspace partykit run dev",
     "build": "npm --workspace frontend run build",
+    "test": "npm --workspace partykit run test",
     "typecheck": "npm --workspace frontend run typecheck && npm --workspace partykit run typecheck"
   }
 }

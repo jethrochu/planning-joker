@@ -485,8 +485,22 @@ input:focus {
   text-overflow: ellipsis;
   white-space: nowrap;
   color: var(--text);
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
   font-size: 14px;
   font-weight: 700;
+}
+
+.host-label {
+  border: 1px solid rgba(8, 127, 117, 0.24);
+  border-radius: 999px;
+  background: var(--teal-soft);
+  color: var(--teal);
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 1;
+  padding: 3px 6px;
 }
 
 .vote-state {
@@ -514,6 +528,12 @@ input:focus {
 
 .workspace-controls button {
   min-width: 184px;
+}
+
+.host-waiting {
+  color: var(--muted);
+  font-size: 14px;
+  font-weight: 720;
 }
 
 .result-stats {

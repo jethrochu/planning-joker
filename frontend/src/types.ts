@@ -4,12 +4,14 @@ export type PublicParticipant = {
   id: string;
   name: string;
   connected: boolean;
+  isHost: boolean;
   voted: boolean;
   vote: string | null;
 };
 
 export type PublicRoomState = {
   roomId: string;
+  hostId: string | null;
   storyTitle: string;
   deck: DeckType;
   revealed: boolean;
