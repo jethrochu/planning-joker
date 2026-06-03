@@ -63,3 +63,16 @@ The Vite base path defaults to relative assets so the build works well on GitHub
 ```bash
 VITE_BASE_PATH=/planning-joker/ npm run build
 ```
+
+## GitHub Pages
+
+The repository includes a GitHub Actions workflow at `.github/workflows/deploy-pages.yml`.
+
+On every push to `main`, GitHub will:
+
+- install dependencies
+- run TypeScript checks
+- build the frontend
+- publish `frontend/dist` to GitHub Pages
+
+In the GitHub repository settings, set Pages to use **GitHub Actions** as the source.
