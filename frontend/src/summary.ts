@@ -18,6 +18,7 @@ export function getVoteCounts(participants: PublicParticipant[]) {
 
 export function getAverageVote(participants: PublicParticipant[]) {
   const numericVotes = participants
+    .filter((participant) => participant.voted && participant.vote !== null)
     .map((participant) => Number(participant.vote))
     .filter((vote) => Number.isFinite(vote));
 

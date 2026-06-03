@@ -7,6 +7,7 @@
     "dev": "vite --host 0.0.0.0",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview --host 0.0.0.0",
+    "test": "tsc --module ESNext --moduleResolution Bundler --target ES2022 --types node --rootDir src --outDir ../.test-output/frontend src/summary.ts src/summary.test.ts && node --test ../.test-output/frontend/summary.test.js",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
