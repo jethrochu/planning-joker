@@ -115,7 +115,7 @@ function HomeScreen({
             id="room-code"
             value={joinCode}
             onChange={(event) => setJoinCode(normalizeRoomId(event.target.value))}
-            placeholder="ABC123"
+            placeholder="ABC123WXYZ"
             autoComplete="off"
           />
           <button type="submit">Join</button>
@@ -171,14 +171,17 @@ function PokerRoom({
   displayName: string;
   onChangeName: () => void;
 }) {
-  const { state, status, error, clientId, send } = usePlanningPokerRoom(roomId, displayName);
+  const { state, status, error, send } = usePlanningPokerRoom(roomId, displayName);
   const [localVote, setLocalVote] = useState<string | null>(null);
   const roomLink = useMemo(() => getRoomLink(roomId), [roomId]);
-  const currentParticipant = state?.participants.find((participant) => participant.id === clientId);
+  const currentParticipant = state?.participants.find(
+    (participant) => participant.id === state.currentParticipantId
+  );
 
   const fallbackState: PublicRoomState = {
     roomId,
-    hostId: null,
+    currentParticipantId: null,
+    isHost: false,
     storyTitle: "",
     deck: "fibonacci",
     revealed: false,
@@ -187,7 +190,7 @@ function PokerRoom({
   };
 
   const activeState = state ?? fallbackState;
-  const isHost = activeState.hostId === clientId;
+  const isHost = activeState.isHost;
   const hostName = activeState.participants.find((participant) => participant.isHost)?.name ?? null;
   const currentVote = activeState.revealed ? currentParticipant?.vote ?? null : localVote;
 
@@ -210,9 +213,17 @@ function PokerRoom({
 
         {error ? <div className="error-banner">{error}</div> : null}
 
-        <StoryEditor storyTitle={activeState.storyTitle} onChange={(storyTitle) => send({ type: "setStoryTitle", storyTitle })} />
+        <StoryEditor
+          storyTitle={activeState.storyTitle}
+          disabled={!isHost}
+          onChange={(storyTitle) => send({ type: "setStoryTitle", storyTitle })}
+        />
 
-        <DeckSelector deck={activeState.deck} onChange={(deck) => send({ type: "setDeck", deck })} disabled={activeState.revealed} />
+        <DeckSelector
+          deck={activeState.deck}
+          onChange={(deck) => send({ type: "setDeck", deck })}
+          disabled={activeState.revealed || !isHost}
+        />
 
         <EstimateCards
           deck={activeState.deck}
@@ -289,9 +300,11 @@ function RoomHeader({
 
 function StoryEditor({
   storyTitle,
+  disabled,
   onChange
 }: {
   storyTitle: string;
+  disabled: boolean;
   onChange: (storyTitle: string) => void;
 }) {
   const [draft, setDraft] = useState(storyTitle);
@@ -313,6 +326,7 @@ function StoryEditor({
       <input
         value={draft}
         onChange={(event) => setDraft(event.target.value)}
+        disabled={disabled}
         maxLength={120}
         placeholder="Sprint backlog item"
       />

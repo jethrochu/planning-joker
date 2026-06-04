@@ -11,7 +11,8 @@ export type PublicParticipant = {
 
 export type PublicRoomState = {
   roomId: string;
-  hostId: string | null;
+  currentParticipantId: string | null;
+  isHost: boolean;
   storyTitle: string;
   deck: DeckType;
   revealed: boolean;
@@ -20,7 +21,7 @@ export type PublicRoomState = {
 };
 
 export type ClientMessage =
-  | { type: "join"; clientId: string; name: string }
+  | { type: "join"; memberKey?: string; name: string }
   | { type: "vote"; vote: string }
   | { type: "reveal" }
   | { type: "reset" }
@@ -30,4 +31,5 @@ export type ClientMessage =
 
 export type ServerMessage =
   | { type: "state"; state: PublicRoomState }
+  | { type: "session"; memberKey: string }
   | { type: "error"; message: string };

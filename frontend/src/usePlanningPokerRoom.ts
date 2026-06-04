@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import PartySocket from "partysocket";
 import type { ClientMessage, PublicRoomState, ServerMessage } from "./types";
-import { getClientId, getSessionId } from "./storage";
+import { getRoomMemberKey, getSessionId, setRoomMemberKey } from "./storage";
 
 type ConnectionStatus = "connecting" | "connected" | "disconnected";
 
@@ -13,7 +13,6 @@ export function usePlanningPokerRoom(roomId: string, name: string) {
   const [error, setError] = useState("");
   const socketRef = useRef<PartySocket | null>(null);
 
-  const clientId = useMemo(() => getClientId(), []);
   const sessionId = useMemo(() => getSessionId(), []);
 
   const send = useCallback((message: ClientMessage) => {
@@ -32,8 +31,7 @@ export function usePlanningPokerRoom(roomId: string, name: string) {
       host: partyHost,
       party: "main",
       room: roomId,
-      id: sessionId,
-      query: () => ({ clientId })
+      id: sessionId
     });
 
     socketRef.current = socket;
@@ -43,7 +41,7 @@ export function usePlanningPokerRoom(roomId: string, name: string) {
       socket.send(
         JSON.stringify({
           type: "join",
-          clientId,
+          memberKey: getRoomMemberKey(roomId),
           name: name.trim()
         } satisfies ClientMessage)
       );
@@ -66,6 +64,10 @@ export function usePlanningPokerRoom(roomId: string, name: string) {
           setError("");
         }
 
+        if (payload.type === "session") {
+          setRoomMemberKey(roomId, payload.memberKey);
+        }
+
         if (payload.type === "error") {
           setError(payload.message);
         }
@@ -80,10 +82,9 @@ export function usePlanningPokerRoom(roomId: string, name: string) {
         socketRef.current = null;
       }
     };
-  }, [clientId, name, roomId, sessionId]);
+  }, [name, roomId, sessionId]);
 
   return {
-    clientId,
     state,
     status,
     error,

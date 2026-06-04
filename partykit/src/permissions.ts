@@ -1,15 +1,15 @@
-export type HostOnlyMessageType = "reveal" | "reset";
+export type HostOnlyMessageType = "reveal" | "reset" | "setStoryTitle" | "setDeck";
 
-const hostOnlyMessages = new Set<string>(["reveal", "reset"]);
+const hostOnlyMessages = new Set<string>(["reveal", "reset", "setStoryTitle", "setDeck"]);
 
 export function isHostOnlyMessage(messageType: string): messageType is HostOnlyMessageType {
   return hostOnlyMessages.has(messageType);
 }
 
 export function canUseHostAction(
-  clientId: string,
+  participantId: string,
   hostId: string | null,
   messageType: string
 ) {
-  return !isHostOnlyMessage(messageType) || clientId === hostId;
+  return !isHostOnlyMessage(messageType) || participantId === hostId;
 }

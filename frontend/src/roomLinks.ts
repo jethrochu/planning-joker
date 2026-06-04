@@ -2,7 +2,7 @@ const ROOM_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 
 export function createRoomId() {
   let id = "";
-  const bytes = new Uint8Array(6);
+  const bytes = new Uint8Array(10);
 
   if (typeof crypto !== "undefined" && "getRandomValues" in crypto) {
     crypto.getRandomValues(bytes);
@@ -12,7 +12,7 @@ export function createRoomId() {
     return id;
   }
 
-  for (let index = 0; index < 6; index += 1) {
+  for (let index = 0; index < 10; index += 1) {
     id += ROOM_ALPHABET[Math.floor(Math.random() * ROOM_ALPHABET.length)];
   }
   return id;

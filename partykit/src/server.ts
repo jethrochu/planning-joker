@@ -5,6 +5,8 @@ type DeckType = "fibonacci" | "tshirt" | "powers";
 
 type StoredParticipant = {
   id: string;
+  publicId: string;
+  memberKey: string;
   name: string;
   connected: boolean;
   vote: string | null;
@@ -31,7 +33,8 @@ type PublicParticipant = {
 
 type PublicRoomState = {
   roomId: string;
-  hostId: string | null;
+  currentParticipantId: string | null;
+  isHost: boolean;
   storyTitle: string;
   deck: DeckType;
   revealed: boolean;
@@ -40,7 +43,7 @@ type PublicRoomState = {
 };
 
 type ClientMessage =
-  | { type: "join"; clientId: string; name: string }
+  | { type: "join"; memberKey?: string; name: string }
   | { type: "vote"; vote: string }
   | { type: "reveal" }
   | { type: "reset" }
@@ -49,7 +52,7 @@ type ClientMessage =
   | { type: "requestState" };
 
 type ConnectionState = {
-  clientId: string;
+  participantId?: string;
 };
 
 const STATE_KEY = "planning-joker.room-state";
@@ -63,6 +66,17 @@ const decks: Record<DeckType, string[]> = {
 
 const deckTypes = Object.keys(decks) as DeckType[];
 
+function randomToken(prefix: string) {
+  const bytes = new Uint8Array(24);
+  crypto.getRandomValues(bytes);
+  const value = btoa(String.fromCharCode(...bytes))
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=+$/g, "");
+
+  return `${prefix}-${value}`;
+}
+
 function createInitialState(): StoredRoomState {
   return {
     hostId: null,
@@ -75,10 +89,22 @@ function createInitialState(): StoredRoomState {
 }
 
 function normalizeState(state: StoredRoomState): StoredRoomState {
+  const participants = Object.fromEntries(
+    Object.entries(state.participants ?? {}).map(([id, participant]) => [
+      id,
+      {
+        ...participant,
+        id: participant.id ?? id,
+        publicId: participant.publicId ?? randomToken("participant"),
+        memberKey: participant.memberKey ?? randomToken("member")
+      }
+    ])
+  );
+
   return {
     ...state,
     hostId: state.hostId ?? null,
-    participants: state.participants ?? {}
+    participants
   };
 }
 
@@ -112,11 +138,8 @@ function isDeckType(value: unknown): value is DeckType {
 export default class Server implements Party.Server {
   constructor(readonly room: Party.Room) {}
 
-  async onConnect(connection: Party.Connection<ConnectionState>, ctx: Party.ConnectionContext) {
-    const url = new URL(ctx.request.url);
-    const clientId = cleanText(url.searchParams.get("clientId") || connection.id, 80);
-    connection.setState({ clientId });
-    await this.sendState(connection);
+  onConnect(connection: Party.Connection<ConnectionState>) {
+    connection.setState({});
   }
 
   async onMessage(message: string, sender: Party.Connection<ConnectionState>) {
@@ -130,17 +153,7 @@ export default class Server implements Party.Server {
     }
 
     const state = await this.getState();
-    const clientId = cleanText(
-      payload.type === "join" ? payload.clientId : sender.state?.clientId,
-      80
-    );
-
-    if (!clientId) {
-      this.sendError(sender, "Missing participant.");
-      return;
-    }
-
-    sender.setState({ clientId });
+    let participantId = sender.state?.participantId;
 
     if (payload.type === "join") {
       const name = cleanText(payload.name, 40);
@@ -149,24 +162,43 @@ export default class Server implements Party.Server {
         return;
       }
 
-      state.participants[clientId] = {
-        id: clientId,
+      const suppliedMemberKey = cleanText(payload.memberKey, 120);
+      const existingParticipant = suppliedMemberKey
+        ? Object.values(state.participants).find(
+            (participant) => participant.memberKey === suppliedMemberKey
+          )
+        : null;
+
+      const participant = existingParticipant ?? {
+        id: randomToken("private"),
+        publicId: randomToken("participant"),
+        memberKey: randomToken("member"),
         name,
         connected: true,
-        vote: state.participants[clientId]?.vote ?? null,
+        vote: null,
         lastSeen: Date.now()
       };
 
+      participant.name = name;
+      participant.connected = true;
+      participant.lastSeen = Date.now();
+      state.participants[participant.id] = participant;
+      participantId = participant.id;
+      sender.setState({ participantId });
       ensureHost(state);
+      await this.saveState(state);
+      this.sendSession(sender, participant.memberKey);
+      this.broadcastState(state);
+      return;
     }
 
-    if (payload.type !== "join" && !state.participants[clientId]) {
+    if (!participantId || !state.participants[participantId]) {
       this.sendError(sender, "Join the room before sending updates.");
       return;
     }
 
-    if (!canUseHostAction(clientId, state.hostId, payload.type)) {
-      this.sendError(sender, "Only the host can reveal or reset votes.");
+    if (!canUseHostAction(participantId, state.hostId, payload.type)) {
+      this.sendError(sender, "Only the host can change room controls.");
       return;
     }
 
@@ -181,8 +213,8 @@ export default class Server implements Party.Server {
         return;
       }
 
-      state.participants[clientId].vote = payload.vote;
-      state.participants[clientId].lastSeen = Date.now();
+      state.participants[participantId].vote = payload.vote;
+      state.participants[participantId].lastSeen = Date.now();
     }
 
     if (payload.type === "reveal") {
@@ -225,20 +257,21 @@ export default class Server implements Party.Server {
   }
 
   async onClose(connection: Party.Connection<ConnectionState>) {
-    const clientId = connection.state?.clientId;
-    if (!clientId) return;
+    const participantId = connection.state?.participantId;
+    if (!participantId) return;
 
     const hasOtherConnection = [...this.room.getConnections<ConnectionState>()].some(
-      (candidate) => candidate.id !== connection.id && candidate.state?.clientId === clientId
+      (candidate) =>
+        candidate.id !== connection.id && candidate.state?.participantId === participantId
     );
 
     if (hasOtherConnection) return;
 
     const state = await this.getState();
-    if (!state.participants[clientId]) return;
+    if (!state.participants[participantId]) return;
 
-    state.participants[clientId].connected = false;
-    state.participants[clientId].lastSeen = Date.now();
+    state.participants[participantId].connected = false;
+    state.participants[participantId].lastSeen = Date.now();
     ensureHost(state);
     await this.saveState(state);
     this.broadcastState(state);
@@ -261,11 +294,16 @@ export default class Server implements Party.Server {
     await this.room.storage.put(STATE_KEY, state);
   }
 
-  private publicState(state: StoredRoomState): PublicRoomState {
+  private publicState(
+    state: StoredRoomState,
+    connection?: Party.Connection<ConnectionState>
+  ): PublicRoomState {
+    const participantId = connection?.state?.participantId ?? null;
+    const currentParticipant = participantId ? state.participants[participantId] : null;
     const participants = Object.values(state.participants)
       .sort((a, b) => a.lastSeen - b.lastSeen)
       .map((participant) => ({
-        id: participant.id,
+        id: participant.publicId,
         name: participant.name,
         connected: participant.connected,
         isHost: participant.id === state.hostId,
@@ -275,7 +313,8 @@ export default class Server implements Party.Server {
 
     return {
       roomId: this.room.id,
-      hostId: state.hostId,
+      currentParticipantId: currentParticipant?.publicId ?? null,
+      isHost: participantId !== null && participantId === state.hostId,
       storyTitle: state.storyTitle,
       deck: state.deck,
       revealed: state.revealed,
@@ -285,20 +324,31 @@ export default class Server implements Party.Server {
   }
 
   private broadcastState(state: StoredRoomState) {
-    this.room.broadcast(
-      JSON.stringify({
-        type: "state",
-        state: this.publicState(state)
-      })
-    );
+    for (const connection of this.room.getConnections<ConnectionState>()) {
+      connection.send(
+        JSON.stringify({
+          type: "state",
+          state: this.publicState(state, connection)
+        })
+      );
+    }
   }
 
-  private async sendState(connection: Party.Connection) {
+  private async sendState(connection: Party.Connection<ConnectionState>) {
     const state = await this.getState();
     connection.send(
       JSON.stringify({
         type: "state",
-        state: this.publicState(state)
+        state: this.publicState(state, connection)
+      })
+    );
+  }
+
+  private sendSession(connection: Party.Connection, memberKey: string) {
+    connection.send(
+      JSON.stringify({
+        type: "session",
+        memberKey
       })
     );
   }
