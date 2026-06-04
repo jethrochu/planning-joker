@@ -52,11 +52,8 @@ Build the frontend for GitHub Pages:
 npm run build
 ```
 
-Production builds read `frontend/.env.production`, which points the static app at the deployed PartyKit host:
-
-```bash
-VITE_PARTYKIT_HOST=planning-joker.jethrochu.partykit.dev
-```
+Production builds read `VITE_PARTYKIT_HOST` from the environment. The GitHub Pages
+workflow expects that value to be configured as a repository variable.
 
 The Vite base path defaults to relative assets so the build works well on GitHub Pages project sites. Override it if needed:
 
