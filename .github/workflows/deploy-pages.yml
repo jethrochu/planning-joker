@@ -35,8 +35,19 @@ jobs:
       - name: Typecheck
         run: npm run typecheck
 
+      - name: Check production config
+        run: |
+          if [ -z "$VITE_PARTYKIT_HOST" ]; then
+            echo "VITE_PARTYKIT_HOST repository variable is required."
+            exit 1
+          fi
+        env:
+          VITE_PARTYKIT_HOST: ${{ vars.VITE_PARTYKIT_HOST }}
+
       - name: Build frontend
         run: npm run build
+        env:
+          VITE_PARTYKIT_HOST: ${{ vars.VITE_PARTYKIT_HOST }}
 
       - name: Configure Pages
         uses: actions/configure-pages@v6
